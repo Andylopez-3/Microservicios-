@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, g
 import sqlite3
+from functools import wraps
 
 
 app = Flask(__name__)
@@ -24,6 +25,7 @@ def inicializar_db():
             estado TEXT NOT NULL
         )
     """)
+    db.commit()
     db.close()
 
 @app.teardown_appcontext
@@ -36,12 +38,12 @@ def cerrar_db(exception):
 # Autenticación básica
 # -----------------------------
 def requiere_autenticacion(funcion):
+    @wraps(funcion)
     def envoltorio(*args, **kwargs):
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
         if token != TOKEN_SECRETO:
-            return jsonify({"error": "Forbidden"}), 403
+            return jsonify({"error": "Token Invalido , Quien sos bro ?"}), 403
         return funcion(*args, **kwargs)
-    envoltorio.__name__ = funcion.__name__
     return envoltorio
 
 # -----------------------------
@@ -54,12 +56,18 @@ def procesar_pago():
     # verificamos si llega la informacion necesaria , para procesar el pago
     if not datos or 'id_pedido' not in datos:
         return jsonify({ "error": "Datos Incompletos "}) , 400
+    
+    try:
+        id_pedido = int(datos['id_pedido'])
+    except (ValueError, TypeError):
+        return jsonify({"error": "id_pedido debe ser un numero entero"}), 400
+    # Aqui se simula el procesamiento del pago
     pago_exitoso = True 
 
     db = obtener_db()
     db.execute(
         "INSERT INTO pagos (id_pedido, estado) VALUES (?, ?)",
-        (datos['id_pedido'], "exitoso" if pago_exitoso else "fallido")
+        (id_pedido, "exitoso" if pago_exitoso else "fallido")
     )
     db.commit()
     return jsonify({"estado": "exitoso"} if pago_exitoso else {"estado": "fallido"}), 201

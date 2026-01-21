@@ -1,4 +1,4 @@
-from flask import Flask, request, g , jsonify
+from flask import Flask, request,g,jsonify
 import sqlite3
 import requests
 from functools import wraps
@@ -26,12 +26,13 @@ def inicializar_db():
             estado TEXT NOT NULL
         )
     """)
+    db.commit()
     db.close()
 
 
 @app.teardown_appcontext
 def cerrar_db(exception):
-    db = g.pop("db", None)
+    db = g.pop('db', None)
     if db:
         db.close()
 
@@ -40,7 +41,7 @@ def requiere_autenticacion(funcion):
     def envoltorio(*args, **kwargs):
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
         if token != TOKEN_SECRETO:
-            return jsonify({"error": "Forbidden"}), 403
+            return jsonify({"error": "Token Invalido ,  Quien sos?"}), 403
         return funcion(*args, **kwargs)
     return envoltorio
 
@@ -52,7 +53,7 @@ def manejar_respuesta_producto(respuesta):
         return jsonify({"error": "Producto no encontrado"}), 404
     
     if status in (401,403):
-        return jsonify({"error": "No autorizado para consultar productos"}), 502
+        return jsonify({"error": "No autorizado para consultar productos"}), 403
     
     if status >= 500:
         return jsonify({"error": "Error en el servicio de productos"}), 503
@@ -62,19 +63,25 @@ def manejar_respuesta_producto(respuesta):
     
         
 @app.route("/pedidos", methods=["POST"])
+@requiere_autenticacion
 def crear_pedido():
     datos = request.json
     # verificamos si llega la informacion necesaria , para guardar el pedido
     if not datos or 'id_producto' not in datos or 'cantidad' not in datos:
-        return jsonify({"error": "Datos incompletos "}), 400
+        return jsonify({"error": " Datos incompletos "}), 400
+    try:
 
-    id_producto = datos["id_producto"]
-    cantidad = datos["cantidad"]
+        id_producto = int(datos["id_producto"])
+        cantidad = int(datos["cantidad"])
+        if cantidad <= 0 or id_producto <= 0:
+            return jsonify({"error": "id_producto y cantidad deben ser numeros enteros positivos"}), 400
+    except (ValueError, TypeError):
+        return jsonify({"error": "id_producto y cantidad deben ser numeros enteros"}), 400
 
     # Verificar producto en microservicio Productos
     try:
         respuesta = requests.get(
-           f"{URL_SERVICIO_PRODUCTOS}/{id_producto}",
+        f"{URL_SERVICIO_PRODUCTOS}/{id_producto}",
             headers={"Authorization": f"Bearer {TOKEN_SECRETO}"},
             timeout=3
         )
@@ -85,17 +92,19 @@ def crear_pedido():
     if error:
         return error
 
-   
     conexion = obtener_db()
     cursor = conexion.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO pedidos (id_producto, cantidad, estado) VALUES (?, ?, ?)",
+            (id_producto, cantidad, "creado")
+        )
+        conexion.commit()
+    except sqlite3.DatabaseError as e:
+        return jsonify({"error": "Error al crear el pedido"}), 500
+    
 
-    cursor.execute(
-        "INSERT INTO pedidos (id_producto, cantidad, estado) VALUES (?, ?, ?)",
-        (id_producto, cantidad, "creado")
-    )
 
-    conexion.commit()
-    conexion.close()
 
     return jsonify({"mensaje": "Pedido creado correctamente"}), 201
 

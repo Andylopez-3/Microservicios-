@@ -14,14 +14,16 @@ def obtener_db():
         g.db = sqlite3.connect(BASE_DE_DATOS)
         g.db.row_factory = sqlite3.Row
     return g.db
+
+
 def inicializar_db():
     db = sqlite3.connect(BASE_DE_DATOS)
     db.execute("""
         CREATE TABLE IF NOT EXISTS productos (
-               id INTEGER PRIMARY KEY AUTOINCREMENT,
-               nombre TEXT NOT NULL,
-               precio REAL NOT NULL
-               )
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL,
+            precio REAL NOT NULL
+        )
         """)
     db.commit()
     db.close()
@@ -71,12 +73,17 @@ def crear_producto():
     datos = request.get_json()
     # validamos que contenga los datos que requiere el servidor para guardar en la base de datos
     if not datos or 'nombre' not in datos or 'precio' not in datos:
-        return jsonify({"error": "datos incompletos"}) ,400
+        return jsonify({"error": "Datos Incompletos"}), 400
+    try:
+        nombre = str(datos['nombre'])
+        precio = float(datos['precio'])
+    except (ValueError, TypeError):
+        return jsonify({"error": "precio debe ser un numero y nombre debe ser texto"}), 400
      
     db = obtener_db()
     cursor = db.execute(
         "INSERT INTO productos (nombre, precio) VALUES (?, ?)",
-        (datos['nombre'], datos['precio'])
+        (nombre, precio)
     )
     db.commit()
     return jsonify({"id": cursor.lastrowid}), 201
