@@ -45,12 +45,12 @@ def requiere_autenticacion(funcion):
         return funcion(*args, **kwargs)
     return envoltorio
 
-def manejar_respuesta_producto(respuesta):
+def manejar_respuesta_producto(respuesta): # maneja errores del servicio de productos
     status = respuesta.status_code
-    if status == 200:
+    if status == 200:   #si todo esta bien no hay error
         return None
-    if status == 404:
-        return jsonify({"error": "Producto no encontrado"}), 404
+    if status == 404: # si el producto no existe
+        return jsonify({"error": "Producto no encontrado"}), 404 # devolvemos error 404 al cliente del servicio de pedidos
     
     if status in (401,403):
         return jsonify({"error": "No autorizado para consultar productos"}), 403
