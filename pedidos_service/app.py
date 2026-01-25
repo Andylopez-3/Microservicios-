@@ -40,7 +40,7 @@ def requiere_autenticacion(funcion):
     @wraps(funcion)
     def envoltorio(*args, **kwargs):
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
-        if token != TOKEN_SECRETO:
+        if token != TOKEN_SECRETO:        # si el token no coincide
             return jsonify({"error": "Token Invalido ,  Quien sos?"}), 403
         return funcion(*args, **kwargs)
     return envoltorio
@@ -94,13 +94,13 @@ def crear_pedido():
 
     conexion = obtener_db()
     cursor = conexion.cursor()
-    try:
+    try:           # guardamos el pedido en la base de datos
         cursor.execute(
             "INSERT INTO pedidos (id_producto, cantidad, estado) VALUES (?, ?, ?)",
             (id_producto, cantidad, "creado")
         )
         conexion.commit()
-    except sqlite3.DatabaseError as e:
+    except sqlite3.DatabaseError as e: #si hay un error en la base de datos , lo manejamos
         return jsonify({"error": "Error al crear el pedido"}), 500
     
 
