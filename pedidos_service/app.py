@@ -1,6 +1,6 @@
 from flask import Flask, request,g,jsonify
 import sqlite3
-import requests
+import requests , logging
 from functools import wraps
 
 app = Flask(__name__)
@@ -8,6 +8,7 @@ app = Flask(__name__)
 TOKEN_SECRETO = "mi_token_secreto"
 URL_SERVICIO_PRODUCTOS = "http://127.0.0.1:5000/productos"
 NOMBRE_BASE_DATOS = "pedidos.db"
+logging.basicConfig(level=logging.INFO)
 
 
 def obtener_db():
@@ -41,6 +42,7 @@ def requiere_autenticacion(funcion):
     def envoltorio(*args, **kwargs):
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
         if token != TOKEN_SECRETO:        # si el token no coincide
+            logging.warning("Intento de acceso no autorizado a pedidos")
             return jsonify({"error": "Token Invalido ,  Quien sos?"}), 403
         return funcion(*args, **kwargs)
     return envoltorio
@@ -61,7 +63,16 @@ def manejar_respuesta_producto(respuesta): # maneja errores del servicio de prod
     return jsonify({"error": "Error desconocido al consultar productos"}), 502
     
     
-        
+@app.route("/pedidos/<int:id_pedido>", methods=["GET"])
+@requiere_autenticacion
+def obtener_pedido(id_pedido):
+    db = obtener_db()
+    cursor = db.execute("SELECT id, id_producto, cantidad, estado FROM pedidos WHERE id=?", (id_pedido,))
+    pedido = cursor.fetchone()
+    if pedido:
+        return jsonify(dict(pedido))
+    return jsonify({"error": "Pedido no encontrado"}), 404
+
 @app.route("/pedidos", methods=["POST"])
 @requiere_autenticacion
 def crear_pedido():
@@ -79,14 +90,23 @@ def crear_pedido():
         return jsonify({"error": "id_producto y cantidad deben ser numeros enteros"}), 400
 
     # Verificar producto en microservicio Productos
-    try:
-        respuesta = requests.get(
-        f"{URL_SERVICIO_PRODUCTOS}/{id_producto}",
-            headers={"Authorization": f"Bearer {TOKEN_SECRETO}"},
-            timeout=3
-        )
-    except requests.exceptions.RequestException:
-        return jsonify({"error": "Servicio de productos no disponible"}), 503
+    respuesta = None
+    for intento in range(3):
+
+        try:
+            respuesta = requests.get(
+            f"{URL_SERVICIO_PRODUCTOS}/{id_producto}",
+                headers={"Authorization": f"Bearer {TOKEN_SECRETO}"},
+                timeout=3
+            )
+            break
+        except requests.exceptions.RequestException:
+            logging.warning(f"REINTENTO {intento + 1}: Servicio de productos no responde")
+            respuesta = None
+    
+    if respuesta is None:
+        logging.error(f"Fallo Critico: No se pudo conectar con el servicio de productos para pedido de ID {id_producto}")
+        return jsonify({"error": "Servicio de productos no disponible tras varios intentos" }), 503
     #manejamos los errores que pueden venir del servicio de productos
     error = manejar_respuesta_producto(respuesta)   
     if error:
@@ -100,7 +120,9 @@ def crear_pedido():
             (id_producto, cantidad, "creado")
         )
         conexion.commit()
+        logging.info(f"PEDIDO CREADO: ID {cursor.lastrowid} para producto {id_producto}")
     except sqlite3.DatabaseError as e: #si hay un error en la base de datos , lo manejamos
+        logging.error(f"Error al crear el pedido : {e}")
         return jsonify({"error": "Error al crear el pedido"}), 500
     
 

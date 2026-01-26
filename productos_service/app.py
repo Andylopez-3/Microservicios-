@@ -1,10 +1,12 @@
 from flask import Flask, request, jsonify, g
-import sqlite3
+import sqlite3 , logging
 from functools import wraps 
 
 app = Flask(__name__)
 BASE_DE_DATOS = 'productos.db'
 TOKEN_SECRETO = "mi_token_secreto"
+
+logging.basicConfig(level=logging.INFO)
 
 # -----------------------------
 # Funciones de base de datos
@@ -42,6 +44,7 @@ def requiere_autenticacion(funcion):
     def envoltorio(*args, **kwargs):
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
         if token != TOKEN_SECRETO:
+            logging.warning("Intento de acceso no autorizado a productos")
             return jsonify({"error": "Token Invalido , Quien sos?"}), 403
         return funcion(*args, **kwargs)
     return envoltorio
@@ -86,6 +89,7 @@ def crear_producto():
         (nombre, precio)
     )
     db.commit()
+    logging.info(f"PRODUCTO CREADO: {nombre}, - ID: {cursor.lastrowid}")
     return jsonify({"id": cursor.lastrowid}), 201
 
 if __name__ == "__main__":
