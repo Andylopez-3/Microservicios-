@@ -1,6 +1,6 @@
-from flask import Flask, request, jsonify, g #importamos g para manejar la conexion a la base de datos , guarda datos durante la peticion
+from flask import Flask, request, jsonify, g #importamos g para manejar la conexion a la base de datos , guarda datos durante el request
 import sqlite3 , logging   # importamos logging para registrar eventos importantes
-from functools import wraps # decoradores para que flask no pierda informacion de la funcion original
+from functools import wraps # decoradores para que flask no pierda informacion de la funcion original , evita que la funcion envuelta pierda su identidad
 
 app = Flask(__name__)  #creamos la aplicacion flask
 BASE_DE_DATOS = 'productos.db'
@@ -34,9 +34,9 @@ def cerrar_db(exception):     # flask cierra la conexion a la base de datos al f
         db.close()    # cerramos la conexion a la base de datos
 
 
-def requiere_autenticacion(funcion):
-    @wraps(funcion)
-    def envoltorio(*args, **kwargs):
+def requiere_autenticacion(funcion):  # decorador para requerir autenticacion en los endpoints
+    @wraps(funcion)   # decorador para que flask no pierda la identidad de la funcion original, y evitar problemas a la hora de manejar rutas 
+    def envoltorio(*args, **kwargs): # args y kwargs para que la funcion acepte cualquier parametro
         token = request.headers.get("Authorization", "").replace("Bearer ", "")   # verificamos el token en los headers de la peticion  , y lo separamos del prefijo "Bearer "
         if token != TOKEN_SECRETO:    # si el token no coincide
             logging.warning("Intento de acceso no autorizado a productos")   # registramos un log de advertencia , de que alguien intento acceder sin autorizacion
@@ -72,7 +72,7 @@ def crear_producto():   # funcion para crear un nuevo producto
     try:
         nombre = str(datos['nombre'])     # nos aseguramos que el nombre es una cadena de texto
         precio = float(datos['precio'])   # nos aseguramos que el precio es un numero decimal
-    except (ValueError, TypeError):         #  una excepcion de conversion , al convertir los datos
+    except (ValueError, TypeError):         #  una excepcion de conversion , al convertir los datos , se captura solo los errores esperados en la conversion
         return jsonify({"error": "precio debe ser un numero y nombre debe ser texto"}), 400   # devolvemos error 400 al cliente
      
     db = obtener_db()

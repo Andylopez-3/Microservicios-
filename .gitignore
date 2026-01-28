@@ -1,0 +1,7 @@
+.venv
+__pycache__
+/pagos_service/pagos.db
+/pedidos_service/venv
+/pedidos_service/pedidos.db
+/productos_service/venv
+/productos_service/productos.db
