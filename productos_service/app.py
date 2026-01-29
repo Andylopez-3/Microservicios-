@@ -47,19 +47,23 @@ def requiere_autenticacion(funcion):  # decorador para requerir autenticacion en
 @app.route("/productos", methods=["GET"])     # endpoint para listar todos los productos que hay en la base de datos
 @requiere_autenticacion   # pasa primero por la autenticacion
 def listar_productos(): # funcion para listar todos los productos
+
     db = obtener_db() # obtenemos la conexion a la base de datos
     cursor = db.execute("SELECT id, nombre, precio FROM productos")   # consulta para obtener todos los productos
     lista_productos = [dict(fila) for fila in cursor.fetchall()]  # convertimos cada fila del resultado de la consulta en un diccionario y lo guardamos en una lista
+    
     return jsonify(lista_productos)  # devolvemos la lista de productos en formato json
 
 @app.route("/productos/<int:id_producto>", methods=["GET"]) # un endpoint para la consulta del servidor de pedidos , obtener un producto por su id
 @requiere_autenticacion    # pasa primero por la autenticacion
-def obtener_producto(id_producto): # funcion para obtener un producto por su id
+def obtener_producto(id_producto): 
+    # funcion para obtener un producto por su id
     db = obtener_db()
     cursor = db.execute("SELECT id, nombre, precio FROM productos WHERE id=?", (id_producto,)) # consulta para obtener el producto por su id en la base de datos
     producto = cursor.fetchone() # obtenemos la primera fila del resultado de la consulta
     if producto: # si existe el producto en la base de datos
         return jsonify(dict(producto))    # devolvemos el producto como un diccionario en formato json
+    
     return jsonify({"error": "Producto no encontrado"}), 404  # si no existe el producto devolvemos error 404
 
 @app.route("/productos", methods=["POST"])   # endpoint para crear un nuevo producto en la base de datos

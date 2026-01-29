@@ -40,11 +40,13 @@ def cerrar_db(exception):   # flask cierra la conexion a la base de datos al fin
 def requiere_autenticacion(funcion):
     @wraps(funcion)
     def envoltorio(*args, **kwargs):
+
         token = request.headers.get("Authorization", "").replace("Bearer ", "")   # verificamos el token en los headers de la peticion  , y lo separamos del prefijo "Bearer "
         if token != TOKEN_SECRETO:        # si el token no coincide
             logging.warning("Intento de acceso no autorizado a pedidos")   # registramos un log de advertencia , de que alguien intento acceder sin autorizacion
             return jsonify({"error": "Token Invalido ,  Quien sos?"}), 403  # devolvemos error 403 al cliente , de que no esta autorizado
         return funcion(*args, **kwargs)
+    
     return envoltorio
 
 def manejar_respuesta_producto(respuesta): # funcion para manejar errores del microservicio de productos
@@ -65,11 +67,13 @@ def manejar_respuesta_producto(respuesta): # funcion para manejar errores del mi
 @app.route("/pedidos/<int:id_pedido>", methods=["GET"])  # creamos un endpoint para obtener un pedido por su id , para la peticion del microservicio de pagos
 @requiere_autenticacion   # pasa primero por la autenticacion
 def obtener_pedido(id_pedido):   # funcion para obtener un pedido por su id
+    
     db = obtener_db()
     cursor = db.execute("SELECT id, id_producto, cantidad, estado FROM pedidos WHERE id=?", (id_pedido,))   # consulta para obtener el pedido por su id en la base de datos
     pedido = cursor.fetchone() # obtenemos la primera fila del resultado de la consulta
     if pedido:  # si existe el pedido en la base de datos
         return jsonify(dict(pedido))  # devolvemos el pedido como un diccionario en formato json
+    
     return jsonify({"error": "Pedido no encontrado"}), 404  # si no existe el pedido devolvemos error 404
 
 @app.route("/pedidos", methods=["POST"])  # creamos un endpoint para crear un nuevo pedido
