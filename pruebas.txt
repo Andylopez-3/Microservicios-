@@ -1,0 +1,59 @@
+#CREAR PRODUCTOS (EXISTOSO)
+Invoke-RestMethod -Uri "http://127.0.0.1:5000/productos" `
+-Method Post `
+-Headers @{"Authorization"="Bearer mi_token_secreto"} `
+-ContentType "application/json" `
+-Body '{"nombre": "Teclado Mecanico", "precio": 150.0}'
+
+#CREAR PEDIDO (EXISTOSO)
+Invoke-RestMethod -Uri "http://127.0.0.1:5001/pedidos" `
+-Method Post `
+-Headers @{"Authorization"="Bearer mi_token_secreto"} `
+-ContentType "application/json" `
+-Body '{"id_producto": 1, "cantidad": 2}'
+
+#SIMULAR PAGOS (EXISTOSO)
+Invoke-RestMethod -Uri "http://127.0.0.1:5002/pagos" `
+-Method Post `
+-Headers @{"Authorization"="Bearer mi_token_secreto"} `
+-ContentType "application/json" `
+-Body '{"id_pedido": 1}'
+
+#SIMULAR TOKEN INVALIDO EN PAGOS(FALLIDO)
+Invoke-RestMethod -Uri "http://127.0.0.1:5002/pagos" `
+-Method Post `
+-Headers @{"Authorization"="Bearer token_falso"} `
+-ContentType "application/json" `
+-Body '{"id_pedido": 1}'
+
+# SIMULAR TIPO DE DATOS MAL ENVIADO EN PAGOS (FALLIDO)
+Invoke-RestMethod -Uri "http://127.0.0.1:5002/pagos" `
+-Method Post `
+-Headers @{"Authorization"="Bearer mi_token_secreto"} `
+-ContentType "application/json" `
+-Body '{"id_pedido": "texto_invalido"}'
+
+#SIMULAR UN PAGO DE UN PEDIDO INEXISTENTES EN PAGOS(FALLIDO)
+Invoke-RestMethod -Uri "http://127.0.0.1:5002/pagos" `
+-Method Post `
+-Headers @{"Authorization"="Bearer mi_token_secreto"} `
+-ContentType "application/json" `
+-Body '{"id_pedido": 9999}'
+
+# COMPROBAMOS EL RETRY EN LA FALLIDA CONEXION ENTRE PEDIDOS Y PRODUCTOS , APAGANDO PRODUCTOS (FALLIDO)
+Invoke-RestMethod -Uri "http://127.0.0.1:5001/pedidos" `
+-Method Post `
+-Headers @{"Authorization"="Bearer mi_token_secreto"} `
+-ContentType "application/json" `
+-Body '{"id_producto": 1, "cantidad": 5}'
+
+#Para consultar todos los productos disponibles (EXISTOSO)
+Invoke-RestMethod -Uri "http://127.0.0.1:5000/productos" `
+-Method Post `
+-Headers @{"Authorization"="Bearer mi_token_secreto"} `
+-ContentType "application/json" `
+
+
+
+
+

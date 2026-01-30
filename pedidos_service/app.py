@@ -1,4 +1,4 @@
-from flask import Flask, request,g,jsonify   #importamos g para manejar la conexion a la base de datos , guarda datos durante la peticion
+from flask import Flask, request,g,jsonify   #importamos g para manejar la conexion a la base de datos , es un espacio temporal donde guarda datos durante la peticion
 import sqlite3
 import requests , logging  # importamos logging para registrar eventos importantes
 from functools import wraps # decoradores para que flask no pierda informacion de la funcion original
@@ -39,7 +39,7 @@ def cerrar_db(exception):   # flask cierra la conexion a la base de datos al fin
 
 def requiere_autenticacion(funcion):
     @wraps(funcion)
-    def envoltorio(*args, **kwargs):
+    def envoltorio(*args, **kwargs): # con esto la funcion puede recibir cualquier numero de argumentos , si importar el tipo de argumentos
 
         token = request.headers.get("Authorization", "").replace("Bearer ", "")   # verificamos el token en los headers de la peticion  , y lo separamos del prefijo "Bearer "
         if token != TOKEN_SECRETO:        # si el token no coincide
