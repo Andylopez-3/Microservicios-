@@ -10,7 +10,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:5001/pedidos" `
 -Method Post `
 -Headers @{"Authorization"="Bearer mi_token_secreto"} `
 -ContentType "application/json" `
--Body '{"id_producto": 1, "cantidad": 2}'
+-Body '{"id_producto": 999, "cantidad": 2}'
 
 #SIMULAR PAGOS (EXISTOSO)
 Invoke-RestMethod -Uri "http://127.0.0.1:5002/pagos" `
@@ -49,7 +49,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:5001/pedidos" `
 
 #Para consultar todos los productos disponibles (EXISTOSO)
 Invoke-RestMethod -Uri "http://127.0.0.1:5000/productos" `
--Method Post `
+-Method Get `
 -Headers @{"Authorization"="Bearer mi_token_secreto"} `
 -ContentType "application/json" `
 

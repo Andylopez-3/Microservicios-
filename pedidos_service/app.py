@@ -1,14 +1,27 @@
 from flask import Flask, request,g,jsonify   #importamos g para manejar la conexion a la base de datos , es un espacio temporal donde guarda datos durante la peticion
 import sqlite3
 import requests , logging  # importamos logging para registrar eventos importantes
-from functools import wraps # decoradores para que flask no pierda informacion de la funcion original
+from functools import wraps  # decoradores para que flask no pierda informacion de la funcion original
+from datetime import datetime, timedelta , timezone  # para manejar tiempos en el circuit breaker
 
 app = Flask(__name__)
 
 TOKEN_SECRETO = "mi_token_secreto"
 URL_SERVICIO_PRODUCTOS = "http://127.0.0.1:5000/productos"
 NOMBRE_BASE_DATOS = "pedidos.db"
-logging.basicConfig(level=logging.INFO)# configuramos el nivel de logging ,(INFO muestra informacion general del funcionamiento(WARNING, ERROR , CRITICAL))
+logging.basicConfig(
+    filename = "pedidos.log",
+    level=logging.INFO, 
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)# configuramos el nivel de logging ,(INFO muestra informacion general del funcionamiento(WARNING, ERROR , CRITICAL))
+
+breaker_state_productos = {"fallos": 0, "max_fallos": 3 , "abierto_hasta": None}
+
+def resetear_circuit_breaker_productos():
+    breaker_state_productos["fallos"] = 0
+    breaker_state_productos["max_fallos"] = 3
+    breaker_state_productos["abierto_hasta"] = None
+    logging.info("Circuit Breaker de Productos reseteado")
 
 
 def obtener_db():
@@ -51,14 +64,27 @@ def requiere_autenticacion(funcion):
 
 def manejar_respuesta_producto(respuesta): # funcion para manejar errores del microservicio de productos
     status = respuesta.status_code    # obtenemos el codigo de estado de la respuesta
-    if status == 200:   #si todo esta bien no hay error
-        return None
+    if status == 200 :
+        if breaker_state_productos["fallos"]> 0:
+            resetear_circuit_breaker_productos()   #si todo esta bien no hay error
+        return jsonify({"mensaje": "Todo OK"}), 200
+    
     if status == 404: # si el producto no existe
+        if breaker_state_productos["fallos"]> 0:
+            resetear_circuit_breaker_productos()
         return jsonify({"error": "Producto no encontrado"}), 404 # devolvemos error 404 al cliente del servicio de pedidos
+    
     if status in (401,403):  # si no esta autorizado 
+        if breaker_state_productos["fallos"]> 0:
+            resetear_circuit_breaker_productos() 
         return jsonify({"error": "No autorizado para consultar productos"}), 403  # devolvemos error 403 al cliente del servicio de pedidos
     
     if status >= 500:     # si hay un error del servidor del microservicio de productos
+        breaker_state_productos["fallos"] += 1
+        logging.error(f"Error interno en el servicio de productos. Fallos consecutivos: {breaker_state_productos['fallos']}")  # registramos un log de error , de que hubo un error en el servidor de productos
+        if breaker_state_productos["fallos"] >= breaker_state_productos["max_fallos"]:
+            breaker_state_productos["abierto_hasta"] = datetime.now(timezone.utc) + timedelta(seconds=30)  # abrimos el circuito por 30 segundos
+            logging.error("Circuit Breaker de Productos abierto por demasiados fallos")  # registramos un log de advertencia , de que se abrio el circuito de productos
         return jsonify({"error": "Error en el servicio de productos"}), 503 # devolvemos error 503 al cliente del servicio de pedidos
     
     return jsonify({"error": "Error desconocido al consultar productos"}), 502 # si hay otro error desconocido devolvemos error 502 al cliente del servicio de pedidos
@@ -76,6 +102,7 @@ def obtener_pedido(id_pedido):   # funcion para obtener un pedido por su id
     
     return jsonify({"error": "Pedido no encontrado"}), 404  # si no existe el pedido devolvemos error 404
 
+
 @app.route("/pedidos", methods=["POST"])  # creamos un endpoint para crear un nuevo pedido
 @requiere_autenticacion  # pasa primero por la autenticacion
 def crear_pedido():  # funcion para crear un nuevo pedido
@@ -92,7 +119,14 @@ def crear_pedido():  # funcion para crear un nuevo pedido
     except (ValueError, TypeError):  # si hay un error al convertir los datos a enteros
         return jsonify({"error": "id_producto y cantidad deben ser numeros enteros"}), 400  # devolvemos error 400 al cliente , por que los datos no son validos
 
-    # Verificar producto en microservicio Productos
+    now = datetime.now(timezone.utc)  # obtenemos la hora actual en UTC
+    if breaker_state_productos["abierto_hasta"]:
+        if now >= breaker_state_productos["abierto_hasta"]:
+            resetear_circuit_breaker_productos()
+        else:
+            return jsonify({"ERROR": "SERVICIOS DE PRODUCTOS INHABILITADOS"}), 503
+    
+
     respuesta = None  # una bandera para saber si la respuesta fue exitosa
     for intento in range(3):  # un retry de 3 intentos para conectarse al microservicio de productos
 
@@ -106,10 +140,16 @@ def crear_pedido():  # funcion para crear un nuevo pedido
         except requests.exceptions.RequestException:   # si hay un error en la peticion
             logging.warning(f"REINTENTO {intento + 1}: Servicio de productos no responde")  # registramos un log de advertencia , de que el servicio de productos no respondio
             respuesta = None  # aseguramos que la respuesta sea None en caso de error , para que siga reintentando la conexion
-    
+
     if respuesta is None:  # si despues de los reintentos no se pudo conectar con el microservicio de productos
         logging.error(f"Fallo Critico: No se pudo conectar con el servicio de productos para pedido de ID {id_producto}")  # registramos un log de error critico , de que  se cayo o no responde el servicio de productos
-        return jsonify({"error": "Servicio de productos no disponible tras varios intentos" }), 503   # devolvemos error 503 al cliente , por que el servicio de productos no esta disponible
+        breaker_state_productos["fallos"] += 1
+        logging.error(f"Error interno en el servicio de productos. Fallos consecutivos: {breaker_state_productos['fallos']}")  # registramos un log de error , de que hubo un error en el servidor de productos
+        if breaker_state_productos["fallos"] >= breaker_state_productos["max_fallos"]:
+            breaker_state_productos["abierto_hasta"] = datetime.now(timezone.utc) + timedelta(seconds=30)  # abrimos el circuito por 30 segundos
+            logging.error("Circuit Breaker de Productos abierto por demasiados fallos")  # registramos un log de advertencia , de que se abrio el circuito de productos
+            return jsonify({"ERROR": "SERVICIOS DE PRODUCTOS INHABILITADOS"}), 503
+        return jsonify({"error": "Servicio de productos no disponible tras varios intentos" }), 503   
     #manejamos los errores que pueden venir del servicio de productos
     error = manejar_respuesta_producto(respuesta)   
     if error:  # si hay un error , lo devolvemos al cliente
