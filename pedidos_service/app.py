@@ -60,6 +60,7 @@ def registrar_fallo_productos():
         breaker_state_productos["estado"] = "ABIERTO"
         breaker_state_productos["abierto_hasta"] = datetime.now(timezone.utc) + timedelta(seconds=30)
         logging.error("Circuit Breaker de Productos reabierto por fallo en prueba por 30 segundos")
+    
     elif breaker_state_productos["fallos"] >= breaker_state_productos["max_fallos"]:
         breaker_state_productos["estado"] = "ABIERTO"
         breaker_state_productos["abierto_hasta"] = datetime.now(timezone.utc) + timedelta(seconds=30)

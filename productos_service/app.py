@@ -6,7 +6,11 @@ app = Flask(__name__)  #creamos la aplicacion flask
 BASE_DE_DATOS = 'productos.db'
 TOKEN_SECRETO = "mi_token_secreto"
 
-logging.basicConfig(level=logging.INFO) # configuramos el nivel de logging ,(INFO muestra informacion general del funcionamiento(WARNING, ERROR , CRITICAL))
+logging.basicConfig(
+    filename="productos.log" ,
+    level=logging.INFO , 
+    format="%(asctime)s - %(levelname)s - %(message)s"
+    ) # configuramos el nivel de logging ,(INFO muestra informacion general del funcionamiento(WARNING, ERROR , CRITICAL))
 
 def obtener_db():
     if 'db' not in g:  # si no hay conexion a la base de datos en g
@@ -51,7 +55,8 @@ def listar_productos(): # funcion para listar todos los productos
     db = obtener_db() # obtenemos la conexion a la base de datos
     cursor = db.execute("SELECT id, nombre, precio FROM productos")   # consulta para obtener todos los productos
     lista_productos = [dict(fila) for fila in cursor.fetchall()]  # convertimos cada fila del resultado de la consulta en un diccionario y lo guardamos en una lista
-    
+
+    logging.info(f"Lista de productos consultada : {len(lista_productos)} Productos")
     return jsonify(lista_productos)  # devolvemos la lista de productos en formato json
 
 @app.route("/productos/<int:id_producto>", methods=["GET"]) # un endpoint para la consulta del servidor de pedidos , obtener un producto por su id
@@ -62,6 +67,7 @@ def obtener_producto(id_producto):
     cursor = db.execute("SELECT id, nombre, precio FROM productos WHERE id=?", (id_producto,)) # consulta para obtener el producto por su id en la base de datos
     producto = cursor.fetchone() # obtenemos la primera fila del resultado de la consulta
     if producto: # si existe el producto en la base de datos
+        logging.info(f"Producto {id_producto} Consultado")
         return jsonify(dict(producto))    # devolvemos el producto como un diccionario en formato json
     
     return jsonify({"error": "Producto no encontrado"}), 404  # si no existe el producto devolvemos error 404
@@ -73,20 +79,31 @@ def crear_producto():   # funcion para crear un nuevo producto
     # validamos que contenga los datos que requiere el servidor para guardar en la base de datos
     if not datos or 'nombre' not in datos or 'precio' not in datos:
         return jsonify({"error": "Datos Incompletos"}), 400   # si no estan los datos necesarios devolvemos error 400
+    
     try:
-        nombre = str(datos['nombre'])     # nos aseguramos que el nombre es una cadena de texto
+        nombre = str(datos['nombre']).strip()    # nos aseguramos que el nombre es una cadena de texto
         precio = float(datos['precio'])   # nos aseguramos que el precio es un numero decimal
+
+        if not nombre:
+            return jsonify({"Error" : "El nombre no puede estar vacio"}) , 400
+        if precio <= 0:
+            return jsonify({"Error" : "El precio debe ser mayor a 0"}) , 400
+        
     except (ValueError, TypeError):         #  una excepcion de conversion , al convertir los datos , se captura solo los errores esperados en la conversion
         return jsonify({"error": "precio debe ser un numero y nombre debe ser texto"}), 400   # devolvemos error 400 al cliente
-     
+    
     db = obtener_db()
     cursor = db.execute(
         "INSERT INTO productos (nombre, precio) VALUES (?, ?)",
         (nombre, precio)
     ) # insertamos el nuevo producto en la base de datos
     db.commit() # guardamos los cambios en la base de datos
-    logging.info(f"PRODUCTO CREADO: {nombre}, - ID: {cursor.lastrowid}")  # registramos en el log la creacion del producto
-    return jsonify({"id": cursor.lastrowid}), 201        # devolvemos el id del ultimo producto creado con codigo 201 (creado)
+    logging.info(f"PRODUCTO CREADO: {nombre}, Precio : ${precio} - ID: {cursor.lastrowid}")  # registramos en el log la creacion del producto
+    return jsonify({
+        "id": cursor.lastrowid ,
+        "nombre": nombre,
+        "precio": precio
+    }), 201        # devolvemos el id del ultimo producto creado con el nombre y su precio con codigo 201 (creado)
 
 if __name__ == "__main__":
     # Inicializar base de datos
